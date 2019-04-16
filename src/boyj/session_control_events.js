@@ -1,3 +1,4 @@
+const socketMap = new Map();
 /**
  * 커넥션 연결 시 소켓에 매핑될 세션객체를 초기화하는 함수
  *
@@ -25,11 +26,12 @@ const createRoom = session => (payload) => {
   if (!payload) {
     throw new Error(`Invalid payload. payload: ${payload}`);
   }
-
   const {
     room,
     callerId,
   } = payload;
+
+  console.log(`createdRoom/ room : ${room} , callerId : ${callerId}`);
 
   if (!room || !callerId) {
     throw new Error(`Invalid payload. room: ${room}, callerId: ${callerId}`);
@@ -45,7 +47,9 @@ const createRoom = session => (payload) => {
   const { socket } = session;
 
   socket.join(room);
+  socketMap.set(callerId, socket);
 };
+
 
 /**
  * create room 이벤트에서 에러 발생 시 에러 핸들러
@@ -67,8 +71,103 @@ const createRoomErrorHandler = (err, context) => {
   socket.emit('SERVER_TO_PEER_ERROR', payload);
 };
 
+const dialToCallee = session => (payload) => {
+  if (!payload) {
+    throw new Error(`Invalid payload. payload: ${payload}`);
+  }
+
+  const {
+    calleeId,
+    skipNotification = false,
+  } = payload;
+
+  if (!calleeId) {
+    throw new Error(`Invalid payload. calleeId: ${calleeId}`);
+  }
+
+  // skip notification
+};
+
+const awaken = session => (payload) => {
+  const {
+    room,
+    calleeId,
+  } = payload;
+
+  const { socket } = session;
+
+  socketMap.set(calleeId, socket);
+
+  console.log(`awaken/ room : ${room} , calleeId : ${calleeId}`);
+};
+
+const created = () => (payload) => {
+  const { calleeId } = payload;
+  console.log(`created/ calleeId : ${calleeId}`);
+};
+
+const accept = session => (payload) => {
+  const {
+    sdp,
+    room,
+    receiver,
+  } = payload;
+
+  const { io, socket } = session;
+
+  console.log(`accept/ sdp : ${sdp} , room : ${room} , receiver : ${receiver}`);
+
+  io.to(room).emit('relayOffer', {
+    sdp,
+    receiver,
+  });
+  socket.join(room);
+};
+
+const sendAnswer = session => (payload) => {
+  const {
+    sdp,
+    receiver,
+    room,
+  } = payload;
+
+  const { io, socket } = session;
+
+  console.log(`sendAnswer/ sdp : ${sdp}, receiver : ${receiver}, room : ${room}`);
+
+  socket.broadcast.to(room).emit('relayAnswer', {
+    sdp,
+    sender: 'sender',
+    receiver,
+  });
+};
+
+const sendIceCandidate = session => (payload) => {
+  const { io, socket } = session;
+
+  const {
+    iceCandidate,
+    receiver,
+    room,
+  } = payload;
+
+  console.log(`sendIceCandidate/ iceCandidate : ${iceCandidate}`);
+
+  socket.broadcast.to(room).emit('relayIceCandidate', {
+    iceCandidate,
+    sender: room,
+    receiver,
+  });
+};
+
 export {
   createSession,
   createRoom,
   createRoomErrorHandler,
+  dialToCallee,
+  awaken,
+  created,
+  accept,
+  sendAnswer,
+  sendIceCandidate,
 };
